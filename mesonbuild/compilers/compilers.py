@@ -67,6 +67,7 @@ lang_suffixes = {
     'swift': ('swift',),
     'java': ('java',),
     'cython': ('pyx', ),
+    'antlr4': ('g4', ),
 }  # type: T.Dict[str, T.Tuple[str, ...]]
 all_languages = lang_suffixes.keys()
 cpp_suffixes = lang_suffixes['cpp'] + ('h',)  # type: T.Tuple[str, ...]
@@ -105,6 +106,7 @@ CFLAGS_MAPPING: T.Mapping[str, str] = {
     'vala': 'VALAFLAGS',
     'rust': 'RUSTFLAGS',
     'cython': 'CYTHONFLAGS',
+    'antlr4': 'ANTLR4FLAGS',
 }
 
 # All these are only for C-linkable languages; see `clink_langs` above.

@@ -215,6 +215,7 @@ def compiler_from_language(env: 'Environment', lang: str, for_machine: MachineCh
         'fortran': detect_fortran_compiler,
         'swift': detect_swift_compiler,
         'cython': detect_cython_compiler,
+        'antlr4': detect_antlr4_compiler,
     }
     return lang_map[lang](env, for_machine) if lang in lang_map else None
 
@@ -958,6 +959,28 @@ def detect_cython_compiler(env: 'Environment', for_machine: MachineChoice) -> Co
         version = search_version(err)
         if 'Cython' in err:
             comp_class = CythonCompiler
+            env.coredata.add_lang_args(comp_class.language, comp_class, for_machine, env)
+            return comp_class(comp, version, for_machine, info, is_cross=is_cross)
+    _handle_exceptions(popen_exceptions, compilers)
+    raise EnvironmentException('Unreachable code (exception to make mypy happy)')
+
+def detect_antlr4_compiler(env: 'Environment', for_machine: MachineChoice) -> Compiler:
+    """Search for a Antlr4 compiler."""
+    compilers, _, _ = _get_compilers(env, 'antlr4', for_machine)
+    is_cross = env.is_cross_build(for_machine)
+    info = env.machines[for_machine]
+
+    popen_exceptions: T.Dict[str, Exception] = {}
+    for comp in compilers:
+        try:
+            stdout = Popen_safe(comp)[1]
+        except OSError as e:
+            popen_exceptions[' '.join(comp)] = e
+            continue
+
+        version = search_version(stderr)
+        if 'ANTLR Parser Generator  Version 4' in err:
+            comp_class = Antlr4Compiler
             env.coredata.add_lang_args(comp_class.language, comp_class, for_machine, env)
             return comp_class(comp, version, for_machine, info, is_cross=is_cross)
     _handle_exceptions(popen_exceptions, compilers)
