@@ -242,6 +242,18 @@ swift_buildtype_args = {'plain': [],
                         'custom': [],
                         }  # type: T.Dict[str, T.List[str]]
 
+antlr4_buildtype_args = {
+                        'dart': [],
+                        'c#': [],
+                        'c++': [],
+                        'go': [],
+                        'java': [],
+                        'js': [],
+                        'python': [],
+                        'php': [],
+                        'swift': [],
+                        }  # type: T.Dict[str, T.List[str]]
+
 gnu_winlibs = ['-lkernel32', '-luser32', '-lgdi32', '-lwinspool', '-lshell32',
                '-lole32', '-loleaut32', '-luuid', '-lcomdlg32', '-ladvapi32']  # type: T.List[str]
 

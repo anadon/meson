@@ -1,73 +1,378 @@
 # SPDX-License-Identifier: Apache-2.0
-# Copyright © 2021 Intel Corporation
+# Copyright © 2022 Josh Marshall (joshua.r.marshall.1991@gmail.com)
 
-"""Abstraction for Cython language compilers."""
+"""
+Support for Antlr4 grammar transpiler.
+"""
 
 import typing as T
 
 from .. import coredata
 from ..mesonlib import EnvironmentException, OptionKey
-from .compilers import Compiler
+from .compilers import Compiler, antlr4_buildtype_args
 
 if T.TYPE_CHECKING:
-    from ..coredata import MutableKeyedOptionDictType, KeyedOptionDictType
+    from ..coredata import MutableKeyedOptionDictType, KeyedOptionDictType, UserComboOption
     from ..environment import Environment
 
 
-class CythonCompiler(Compiler):
+class Antlr4CppCompiler(Compiler):
 
-    """Antlr4 Compiler."""
+    """
+    Antlr4 Cpp Compiler.
+
+    For proof of concept, specialize for the C++ case to keep the
+    first implementation simpler.
+
+    TODO: support the following flags
+    -lib ___            specify location of grammars, tokens files
+    -atn                generate rule augmented transition network diagrams
+    -encoding ___       specify grammar file encoding; e.g., euc-jp
+    -message-format ___ specify output style for messages in antlr, gnu, vs2005
+    -long-messages      show exception details when available for errors and warnings
+    -listener           generate parse tree listener (default)
+    -no-listener        don't generate parse tree listener
+    -visitor            generate parse tree visitor
+    -no-visitor         don't generate parse tree visitor (default)
+    -package ___        specify a package/namespace for the generated code
+    -depend             generate file dependencies
+    -D<option>=value    set/override a grammar-level option
+    -XdbgST             launch StringTemplate visualizer on generated code
+    -XdbgSTWait         wait for STViz to close before continuing
+    -Xforce-atn         use the ATN simulator for all predictions
+    -Xlog               dump lots of logging info to antlr-timestamp.log
+    """
 
     language = 'antlr4'
     id = 'antlr4'
+
+    # -Dlanguage=
+    language_key = OptionKey('language', machine=self.for_machine, lang=self.language)
+    language_options = coredata.UserComboOption(
+        'Set the grammar to transpile to dart c#, c++, go, java, js, python, php, or swift files.',
+        list(antlr4_buildtype_args.keys()),
+        'java',
+    )
+
+    # -DsuperClass
+    super_class_key = OptionKey('superClass', machine=self.for_machine, lang=self.language)
+    superClass_options = coredata.UserStringOption(
+        'Set the superclass of the generated parser or lexer.',
+        '',
+    )
+
+    # -DtokenVocab
+    token_vocab_key = OptionKey('tokenVocab', machine=self.for_machine, lang=self.language)
+    tokenVocab_options = coredata.UserStringOption(
+        'See https://github.com/antlr/antlr4/blob/master/doc/options.md#tokenvocab',
+        '',
+    )
+
+    # -DTokenLabelType
+    token_label_type_key = OptionKey('TokenLabelType', machine=self.for_machine, lang=self.language)
+    TokenLabelType_options = coredata.UserStringOption(
+        'See https://github.com/antlr/antlr4/blob/master/doc/options.md#tokenlabeltype',
+        '',
+    )
+
+    # -DcontextSuperClass
+    context_super_class_key = OptionKey('contextSuperClass', machine=self.for_machine, lang=self.language)
+    contextSuperClass_options = coredata.UserStringOption(
+        'Specify the super class name of parse tree internal nodes.',
+        '',
+    )
+
+    # -DcaseInsensitive
+    case_insensitive_key = OptionKey('caseInsensitive', machine=self.for_machine, lang=self.language)
+    caseInsensitive_options = coredata.UserBooleanOption(
+        'Use case-insensitive lexing; better specified as an in-file grammar option.',
+        False,
+    )
+
+
+    # -lib ___
+    lib_key = OptionKey('lib', machine=self.for_machine, lang=self.language)
+    lib_options = coredata.UserStringOption(
+        'specify location of grammars, tokens files.',
+        '',
+    )
+
+    # -atn
+    atn_key = OptionKey('atn', machine=self.for_machine, lang=self.language)
+    atn_options = coredata.UserBooleanOption(
+        'Generate rule augmented transition network diagrams.',
+        False,
+    )
+
+    # -encoding ___       specify grammar file encoding; e.g., euc-jp
+    encoding_key = OptionKey('encoding', machine=self.for_machine, lang=self.language)
+    encoding_options = coredata.UserStringOption(
+        'Specify grammar file encoding; e.g., euc-jp.  Defaults to utf-8.',
+        'utf-8',
+    )
+
+    # -message-format ___ specify output style for messages in antlr, gnu, vs2005
+    message_format_key = OptionKey('message_format', machine=self.for_machine, lang=self.language)
+    message_format_options = coredata.UserComboOption(
+        'specify output style for messages.',
+        ['antlr', 'gnu', 'vs2005'],
+        'antlr',
+    )
+
+    # -long-messages      show exception details when available for errors and warnings
+    long_messages_key = OptionKey('long_messages', machine=self.for_machine, lang=self.language)
+    long_messages_options = coredata.UserBooleanOption(
+        'Show exception details when available for errors and warnings.',
+        False,
+    )
+
+    # -listener           generate parse tree listener (default)
+    generate_listener_key = OptionKey('generate_listener', machine=self.for_machine, lang=self.language)
+    generate_listener_options = coredata.UserBooleanOption(
+        'Generate parse tree listener.',
+        True,
+    )
+
+    # # -no-listener        don't generate parse tree listener
+    # case_insensitive_key = OptionKey('caseInsensitive', machine=self.for_machine, lang=self.language)
+    # caseInsensitive_options = coredata.UserBooleanOption(
+    #     'Use case-insensitive lexing; better specified as an in-file grammar option.',
+    #     False,
+    # )
+
+    # -visitor            generate parse tree visitor
+    generate_visitor_key = OptionKey('generate_visitor', machine=self.for_machine, lang=self.language)
+    generate_visitor_options = coredata.UserBooleanOption(
+        'Generate parse tree visitor.',
+        False,
+    )
+
+    # # -no-visitor         don't generate parse tree visitor (default)
+    # case_insensitive_key = OptionKey('caseInsensitive', machine=self.for_machine, lang=self.language)
+    # caseInsensitive_options = coredata.UserBooleanOption(
+    #     'Use case-insensitive lexing; better specified as an in-file grammar option.',
+    #     False,
+    # )
+
+    # -package ___        specify a package/namespace for the generated code
+    package_key = OptionKey('package', machine=self.for_machine, lang=self.language)
+    package_options = coredata.UserStringOption(
+        'Specify a package/namespace for the generated code.',
+        '',
+    )
+
+    # -depend             generate file dependencies
+    depend_key = OptionKey('depend', machine=self.for_machine, lang=self.language)
+    depend_options = coredata.UserBooleanOption(
+        'Generate file dependencies.',
+        False,
+    )
+
+    # -Werror             treat warnings as errors
+    warnings_are_errors_key = OptionKey('warnings_are_errors', machine=self.for_machine, lang=self.language)
+    warnings_are_errors_options = coredata.UserBooleanOption(
+        'Treat warnings as errors.',
+        False,
+    )
+
+    # -XdbgST             launch StringTemplate visualizer on generated code
+    debug_string_template_visualizer_key = OptionKey('XdbgST', machine=self.for_machine, lang=self.language)
+    debug_string_template_visualizer_options = coredata.UserBooleanOption(
+        'Launch StringTemplate visualizer on generated code.',
+        False,
+    )
+
+    # -XdbgSTWait         wait for STViz to close before continuing
+    debug_string_template_visualizer_wait_key = OptionKey('XdbgSTWait', machine=self.for_machine, lang=self.language)
+    debug_string_template_visualizer_wait_options = coredata.UserBooleanOption(
+        'Wait for STViz to close before continuing.',
+        False,
+    )
+
+    # -Xforce-atn         use the ATN simulator for all predictions
+    xforce_atn_key = OptionKey('x_force_atn', machine=self.for_machine, lang=self.language)
+    xforce_atn_options = coredata.UserBooleanOption(
+        'Use the ATN simulator for all predictions.',
+        False,
+    )
+
+    # -Xlog               dump lots of logging info to antlr-timestamp.log
+    x_log_key = OptionKey('Xlog', machine=self.for_machine, lang=self.language)
+    x_log_options = coredata.UserBooleanOption(
+        'Dump lots of logging info to antlr-timestamp.log.',
+        False,
+    )
+
+    # -Xexact-output-dir  all output goes into -o dir regardless of paths/package
+    x_exact_output_dir_key = OptionKey('Xexact-output-dir', machine=self.for_machine, lang=self.language)
+    x_exact_output_dir_options = coredata.UserBooleanOption(
+        'All output goes into -o dir regardless of paths/package.',
+        False,
+    )
+
 
     def needs_static_linker(self) -> bool:
         # We transpile into C, so we don't need any linker
         return False
 
-    # def get_always_args(self) -> T.List[str]:
-    #     return ['--fast-fail']
+    def get_always_args(self) -> T.List[str]:
+        return ['--fast-fail']
 
- -o ___              specify output directory where all output is generated
- -lib ___            specify location of grammars, tokens files
- -atn                generate rule augmented transition network diagrams
- -encoding ___       specify grammar file encoding; e.g., euc-jp
- -message-format ___ specify output style for messages in antlr, gnu, vs2005
- -long-messages      show exception details when available for errors and warnings
- -listener           generate parse tree listener (default)
- -no-listener        don't generate parse tree listener
- -visitor            generate parse tree visitor
- -no-visitor         don't generate parse tree visitor (default)
- -package ___        specify a package/namespace for the generated code
- -depend             generate file dependencies
- -D<option>=value    set/override a grammar-level option
- -Werror             treat warnings as errors
- -XdbgST             launch StringTemplate visualizer on generated code
- -XdbgSTWait         wait for STViz to close before continuing
- -Xforce-atn         use the ATN simulator for all predictions
- -Xlog               dump lots of logging info to antlr-timestamp.log
- -Xexact-output-dir  all output goes into -o dir regardless of paths/package
 
     def get_werror_args(self) -> T.List[str]:
+        # -Werror             treat warnings as errors
         return ['-Werror']
 
     def get_output_args(self, outputname: str) -> T.List[str]:
+        # -o ___              specify output directory where all output is generated
+        # TODO: -Xexact-output-dir  all output goes into -o dir regardless of paths/package
         return ['-o', outputname]
 
     def get_optimization_args(self, optimization_level: str) -> T.List[str]:
-        # Cython doesn't have optimization levels itself, the underlying
+        # Antlr4 doesn't have optimization levels itself, the underlying
         # compiler might though
         return []
 
     def sanity_check(self, work_dir: str, environment: 'Environment') -> None:
-        code = 'print("hello world")'
+        code = """
+            /*
+             [The "BSD licence"]
+             Copyright (c) 2013 Tom Everett
+             All rights reserved.
+             Redistribution and use in source and binary forms, with or without
+             modification, are permitted provided that the following conditions
+             are met:
+             1. Redistributions of source code must retain the above copyright
+                notice, this list of conditions and the following disclaimer.
+             2. Redistributions in binary form must reproduce the above copyright
+                notice, this list of conditions and the following disclaimer in the
+                documentation and/or other materials provided with the distribution.
+             3. The name of the author may not be used to endorse or promote products
+                derived from this software without specific prior written permission.
+             THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+             IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+             OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+             IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+             INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+             NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+             DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+             THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+             (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+             THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+            */
+
+            grammar bnf;
+
+            rulelist
+                : rule_* EOF
+            ;
+
+            rule_
+                : lhs ASSIGN rhs
+                ;
+
+            lhs
+                : id_
+                ;
+
+            rhs
+                : alternatives
+                ;
+
+            alternatives
+                : alternative (BAR alternative)*
+                ;
+
+            alternative
+                : element*
+                ;
+
+            element
+                : optional_
+                | zeroormore
+                | oneormore
+                | text_
+                | id_
+                ;
+
+            optional_
+                : REND alternatives LEND
+                ;
+
+            zeroormore
+                : RBRACE alternatives LBRACE
+                ;
+
+            oneormore
+                : RPAREN alternatives LPAREN
+                ;
+
+            text_
+                : ID
+                ;
+
+            id_
+                : LT ruleid GT
+                ;
+
+            ruleid
+                : ID
+                ;
+
+            ASSIGN
+                : '::='
+                ;
+
+            LPAREN
+                : ')'
+                ;
+
+            RPAREN
+                : '('
+                ;
+
+            LBRACE
+                : '}'
+                ;
+
+            RBRACE
+                : '{'
+                ;
+
+            LEND
+                : ']'
+                ;
+
+            REND
+                : '['
+                ;
+
+            BAR
+                : '|'
+                ;
+
+            GT
+                : '>'
+                ;
+
+            LT
+                : '<'
+                ;
+
+            ID
+                : ('a'..'z'|'A'..'Z') ('a'..'z'|'A'..'Z'|'0'..'9'|'-'|' ')+
+                ;
+
+            WS
+                : [ \r\n\t] -> skip
+                ;
+        """
         with self.cached_compile(code, environment.coredata) as p:
             if p.returncode != 0:
-                raise EnvironmentException(f'Cython compiler {self.id!r} cannot compile programs')
+                raise EnvironmentException(f'Antlr4 transpiler {self.id!r} cannot transpile grammars')
 
     def get_buildtype_args(self, buildtype: str) -> T.List[str]:
-        # Cython doesn't implement this, but Meson requires an implementation
-        return []
+        return antlr4_buildtype_args[buildtype]
 
     def get_pic_args(self) -> T.List[str]:
         # We can lie here, it's fine
@@ -82,26 +387,113 @@ class CythonCompiler(Compiler):
         return new
 
     def get_options(self) -> 'MutableKeyedOptionDictType':
+        """
+        Set up the CLI args available
+        """
         opts = super().get_options()
         opts.update({
-            OptionKey('version', machine=self.for_machine, lang=self.language): coredata.UserComboOption(
-                'Python version to target',
-                ['2', '3'],
-                '3',
-            ),
-            OptionKey('language', machine=self.for_machine, lang=self.language): coredata.UserComboOption(
-                'Output C or C++ files',
-                ['c', 'cpp'],
-                'c',
-            )
+            language_key: language_options,
+            super_class_key: superClass_options,
+            token_vocab_key: tokenVocab_options,
+            token_label_type_key: TokenLabelType_options,
+            context_super_class_key: contextSuperClass_options,
+            case_insensitive_key: caseInsensitive_options,
+            lib_key: lib_options,
+            atn_key: atn_options,
+            encoding_key: encoding_options,
+            message_format_key: message_format_options,
+            long_messages_key: long_messages_options,
+            generate_listener_key: generate_listener_options,
+            generate_visitor_key: generate_visitor_options,
+            package_key: package_options,
+            depend_key: depend_options,
+            debug_string_template_visualizer_key: debug_string_template_visualizer_options,
+            debug_string_template_visualizer_wait_key: debug_string_template_visualizer_wait_options,
+            x_force_atn_key: x_force_atn_options,
+            x_log_key: x_log_options,
+            x_exact_output_dir_key: x_exact_output_dir_options,
         })
         return opts
 
     def get_option_compile_args(self, options: 'KeyedOptionDictType') -> T.List[str]:
+        """
+        Translate recieved CLI options to an array which is converted to a CLI
+        invocation string
+        """
         args: T.List[str] = []
-        key = options[OptionKey('version', machine=self.for_machine, lang=self.language)]
-        args.append(f'-{key.value}')
-        lang = options[OptionKey('language', machine=self.for_machine, lang=self.language)]
-        if lang.value == 'cpp':
-            args.append('--cplus')
+
+        args.append(f'-Dlanguage={options[language_key].value}')
+
+        tmp = options[super_class_key].value
+        if tmp:
+            args.append(f'-DsuperClass={tmp}')
+
+        tmp = options[token_vocab_key].value
+        if tmp:
+            args.append(f'-DtokenVocab={tmp}')
+
+        tmp = options[token_label_type_key].value
+        if tmp:
+            args.append(f'-DTokenLabelType={tmp}')
+
+        tmp = options[context_super_class_key].value
+        if tmp:
+            args.append(f'-DcontextSuperClass={tmp}')
+
+        tmp = options[case_insensitive_key].value
+        if tmp:
+            args.append(f'-DcaseInsensitive={tmp}')
+
+        tmp = options[lib_key].value
+        if tmp:
+            args.extend(['-lib', tmp])
+
+        tmp = options[atn_key].value
+        if tmp:
+            args.append(f'-atn')
+
+        tmp = options[encoding_key].value
+        if tmp:
+            args.extend(['-encoding', tmp])
+
+        tmp = options[message_format_key].value
+        if tmp:
+            args.extend(['-message-format', tmp])
+
+        if options[long_messages_key].value:
+            args.append('-long-messages')
+
+        tmp = options[generate_listener_key].value
+        if not tmp:
+            args.append('-no-listener')
+
+        tmp = options[generate_visitor_key].value
+        if tmp:
+            args.append('-visitor')
+
+        tmp = options[package_key].value
+        if tmp:
+            args.extend(['-package', tmp])
+
+        if options[depend_key].value:
+            args.append('-depend')
+
+        if options[warnings_are_errors_key].value:
+            args.append('-Werror')
+
+        if options[debug_string_template_visualizer_key].value:
+            args.append('-XdbgST')
+
+        if options[debug_string_template_visualizer_wait_key].value:
+            args.append('-XdbgSTWait')
+
+        if options[x_force_atn_key].value:
+            args.append('-Xforce-atn')
+
+        if options[x_log_key].value:
+            args.append('-Xlog')
+
+        if options[x_exact_output_dir_key].value:
+            args.append('-Xexact-output-dir')
+
         return args
