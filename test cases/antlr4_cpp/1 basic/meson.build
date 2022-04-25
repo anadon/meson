@@ -15,5 +15,5 @@ subdir('libdir')
 
 test('Antlr4 tester',
   a4,
-  args : [files('edn.g4'), 
+  args : [files('edn.g4')]
 )

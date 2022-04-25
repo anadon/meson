@@ -969,6 +969,10 @@ class BuildTarget(Target):
         # it won't get added above.
         if 'vala' in self.compilers and 'c' not in self.compilers:
             self.compilers['c'] = self.all_compilers['c']
+        if 'antlr4' in self.compilers and 'c' not in self.compilers:
+            # TODO: Add logic for detecting requested build languages
+            pass
+            # self.compilers['c'] = self.all_compilers['c']
         if 'cython' in self.compilers:
             key = OptionKey('language', machine=self.for_machine, lang='cython')
             value = self.get_option(key)

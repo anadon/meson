@@ -775,6 +775,9 @@ class NinjaBackend(backends.Backend):
         elif 'cython' in target.compilers:
             target_sources, generated_sources, \
                 transpiled_sources = self.generate_cython_transpile(target)
+        elif 'antlr4' in target.compilers:
+            target_sources, generated_sources, \
+                transpiled_sources = self.generate_antlr4_transpile(target)
         else:
             target_sources = self.get_target_sources(target)
             generated_sources = self.get_target_generated_sources(target)
@@ -1655,6 +1658,66 @@ class NinjaBackend(backends.Backend):
                 else:
                     generated_sources[ssrc] = mesonlib.File.from_built_file(gen.get_subdir(), ssrc)
 
+    def generate_antlr4_transpile(self, target: build.BuildTarget) -> \
+            T.Tuple[T.MutableMapping[str, File], T.MutableMapping[str, File], T.List[str]]:
+        """Generate rules for transpiling Antlr4 files to a lot.
+
+        """
+        static_sources: T.MutableMapping[str, File] = OrderedDict()
+        generated_sources: T.MutableMapping[str, File] = OrderedDict()
+        cython_sources: T.List[str] = []
+
+        antlr4 = target.compilers['antlr4']
+
+        args: T.List[str] = []
+        args += cython.get_always_args()
+        args += cython.get_buildtype_args(target.get_option(OptionKey('buildtype')))
+        args += cython.get_debug_args(target.get_option(OptionKey('debug')))
+        args += cython.get_optimization_args(target.get_option(OptionKey('optimization')))
+        args += cython.get_option_compile_args(target.get_options())
+        args += self.build.get_global_args(cython, target.for_machine)
+        args += self.build.get_project_args(cython, target.subproject, target.for_machine)
+        args += target.get_extra_args('cython')
+
+        ext = target.get_option(OptionKey('language', machine=target.for_machine, lang='cython'))
+
+        for src in target.get_sources():
+            if src.endswith('.g4'):
+                output = os.path.join(self.get_target_private_dir(target), f'{src}.{ext}')
+                args = args.copy()
+                args += cython.get_output_args(output)
+                element = NinjaBuildElement(
+                    self.all_outputs, [output],
+                    self.compiler_to_rule_name(antlr4),
+                    [src.absolute_path(self.environment.get_source_dir(), self.environment.get_build_dir())])
+                element.add_item('ARGS', args)
+                self.add_build(element)
+                # TODO: introspection?
+                cython_sources.append(output)
+            else:
+                static_sources[src.rel_to_builddir(self.build_to_src)] = src
+
+        for gen in target.get_generated_sources():
+            for ssrc in gen.get_outputs():
+                if isinstance(gen, GeneratedList):
+                    ssrc = os.path.join(self.get_target_private_dir(target), ssrc)
+                else:
+                    ssrc = os.path.join(gen.get_subdir(), ssrc)
+                if ssrc.endswith('.g4'):
+                    args = args.copy()
+                    output = os.path.join(self.get_target_private_dir(target), f'{ssrc}.{ext}')
+                    args += cython.get_output_args(output)
+                    element = NinjaBuildElement(
+                        self.all_outputs, [output],
+                        self.compiler_to_rule_name(cython),
+                        [ssrc])
+                    element.add_item('ARGS', args)
+                    self.add_build(element)
+                    # TODO: introspection?
+                    cython_sources.append(output)
+                else:
+                    generated_sources[ssrc] = mesonlib.File.from_built_file(gen.get_subdir(), ssrc)
+
         return static_sources, generated_sources, cython_sources
 
     def _generate_copy_target(self, src: 'mesonlib.FileOrString', output: Path) -> None:
@@ -2112,6 +2175,12 @@ class NinjaBackend(backends.Backend):
         description = 'Compiling Cython source $in'
         self.add_rule(NinjaRule(rule, command, [], description, extra='restat = 1'))
 
+    def generate_antlr4_compile_rules(self, compiler: 'Compiler') -> None:
+        rule = self.compiler_to_rule_name(compiler)
+        command = compiler.get_exelist() + ['$ARGS', '$in']
+        description = 'Compiling Antlr4 source $in'
+        self.add_rule(NinjaRule(rule, command, [], description, extra='restat = 1'))
+
     def generate_rust_compile_rules(self, compiler):
         rule = self.compiler_to_rule_name(compiler)
         command = compiler.get_exelist() + ['$ARGS', '$in']
@@ -2185,6 +2254,9 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             return
         if langname == 'cython':
             self.generate_cython_compile_rules(compiler)
+            return
+        if langname == 'antlr4':
+            self.generate_antlr4_compile_rules(compiler)
             return
         crstr = self.get_rule_suffix(compiler.for_machine)
         if langname == 'fortran':
@@ -2731,11 +2803,11 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         # FIXME FIXME: The usage of this is a terrible and unreliable hack
         if isinstance(fname, File):
             return fname.subdir != ''
-        return has_path_sep(fname)
+         return has_path_sep(fname)
 
     # Fortran is a bit weird (again). When you link against a library, just compiling a source file
     # requires the mod files that are output when single files are built. To do this right we would need to
-    # scan all inputs and write out explicit deps for each file. That is stoo slow and too much effort so
+    # scan all inputs and write out explicit deps for each file. That is too slow and too much effort so
     # instead just have an ordered dependency on the library. This ensures all required mod files are created.
     # The real deps are then detected via dep file generation from the compiler. This breaks on compilers that
     # produce incorrect dep files but such is life.

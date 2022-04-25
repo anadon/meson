@@ -129,6 +129,7 @@ __all__ = [
     'VisualStudioCCompiler',
     'VisualStudioCPPCompiler',
     'CythonCompiler',
+    'Antlr4Transpiler'
 ]
 
 # Bring symbols from each module into compilers sub-package namespace
@@ -256,3 +257,4 @@ from .mixins.gnu import GnuCompiler, GnuLikeCompiler
 from .mixins.intel import IntelGnuLikeCompiler, IntelVisualStudioLikeCompiler
 from .mixins.clang import ClangCompiler
 from .cython import CythonCompiler
+from .antlr4 import Antlr4Transpiler

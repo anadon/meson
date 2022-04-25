@@ -16,7 +16,7 @@ if T.TYPE_CHECKING:
     from ..environment import Environment
 
 
-class Antlr4CppCompiler(Compiler):
+class Antlr4Transpiler(Compiler):
 
     """
     Antlr4 Cpp Compiler.
