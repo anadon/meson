@@ -2803,7 +2803,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         # FIXME FIXME: The usage of this is a terrible and unreliable hack
         if isinstance(fname, File):
             return fname.subdir != ''
-         return has_path_sep(fname)
+        return has_path_sep(fname)
 
     # Fortran is a bit weird (again). When you link against a library, just compiling a source file
     # requires the mod files that are output when single files are built. To do this right we would need to
