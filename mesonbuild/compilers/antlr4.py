@@ -127,32 +127,20 @@ class Antlr4CppCompiler(Compiler):
     )
 
     # -listener           generate parse tree listener (default)
+    # -no-listener        don't generate parse tree listener
     generate_listener_key = OptionKey('generate_listener', machine=self.for_machine, lang=self.language)
     generate_listener_options = coredata.UserBooleanOption(
         'Generate parse tree listener.',
         True,
     )
 
-    # # -no-listener        don't generate parse tree listener
-    # case_insensitive_key = OptionKey('caseInsensitive', machine=self.for_machine, lang=self.language)
-    # caseInsensitive_options = coredata.UserBooleanOption(
-    #     'Use case-insensitive lexing; better specified as an in-file grammar option.',
-    #     False,
-    # )
-
     # -visitor            generate parse tree visitor
+    # -no-visitor         don't generate parse tree visitor (default)
     generate_visitor_key = OptionKey('generate_visitor', machine=self.for_machine, lang=self.language)
     generate_visitor_options = coredata.UserBooleanOption(
         'Generate parse tree visitor.',
         False,
     )
-
-    # # -no-visitor         don't generate parse tree visitor (default)
-    # case_insensitive_key = OptionKey('caseInsensitive', machine=self.for_machine, lang=self.language)
-    # caseInsensitive_options = coredata.UserBooleanOption(
-    #     'Use case-insensitive lexing; better specified as an in-file grammar option.',
-    #     False,
-    # )
 
     # -package ___        specify a package/namespace for the generated code
     package_key = OptionKey('package', machine=self.for_machine, lang=self.language)
