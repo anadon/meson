@@ -1,9 +1,0 @@
-{
-  "matrix": {
-    "options": {
-      "antlr4_language": [
-         { "val": "cpp" }
-      ]
-    }
-  }
-}

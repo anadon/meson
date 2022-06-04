@@ -134,6 +134,7 @@ from .cython import CythonCompiler
 from .rust import RustCompiler, ClippyRustCompiler
 from .swift import SwiftCompiler
 from .vala import ValaCompiler
+from .antlr4 import Antlr4Transpiler
 from .mixins.visualstudio import VisualStudioLikeCompiler
 from .mixins.gnu import GnuCompiler
 from .mixins.clang import ClangCompiler
@@ -198,6 +199,7 @@ defaults['clang_cl_static_linker'] = ['llvm-lib']
 defaults['cuda_static_linker'] = ['nvlink']
 defaults['gcc_static_linker'] = ['gcc-ar']
 defaults['clang_static_linker'] = ['llvm-ar']
+defaults['antlr4'] = ['antlr4']
 
 
 def compiler_from_language(env: 'Environment', lang: str, for_machine: MachineChoice) -> T.Optional[Compiler]:
@@ -973,14 +975,14 @@ def detect_antlr4_compiler(env: 'Environment', for_machine: MachineChoice) -> Co
     popen_exceptions: T.Dict[str, Exception] = {}
     for comp in compilers:
         try:
-            stdout = Popen_safe(comp)[1]
+            _, stdout, _ = Popen_safe(comp)
         except OSError as e:
             popen_exceptions[' '.join(comp)] = e
             continue
 
-        version = search_version(stderr)
-        if 'ANTLR Parser Generator  Version 4' in err:
-            comp_class = Antlr4Compiler
+        version = search_version(stdout)
+        if 'ANTLR Parser Generator  Version 4' in stdout:
+            comp_class = Antlr4Transpiler
             env.coredata.add_lang_args(comp_class.language, comp_class, for_machine, env)
             return comp_class(comp, version, for_machine, info, is_cross=is_cross)
     _handle_exceptions(popen_exceptions, compilers)
