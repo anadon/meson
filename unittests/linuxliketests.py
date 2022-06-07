@@ -1,4 +1,4 @@
-# Copyright 2016-2021 The Meson development team
+# Copyright 2016-2022 The Meson development team
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -387,8 +387,8 @@ class LinuxlikeTests(BasePlatformTests):
         Test that qt6 detection with qmake works. This can't be an ordinary
         test case because it involves setting the environment.
         '''
-        # Verify that qmake is for Qt5
-        if not shutil.which('qmake-qt6'):
+        # Verify that qmake is for Qt6
+        if not shutil.which('qmake6'):
             if not shutil.which('qmake'):
                 raise SkipTest('QMake not found')
             output = subprocess.getoutput('qmake --version')
@@ -1152,9 +1152,12 @@ class LinuxlikeTests(BasePlatformTests):
         env = get_fake_env(testdir, self.builddir, self.prefix)
         env.coredata.set_options({OptionKey('pkg_config_path'): pkg_dir}, subproject='')
 
-        PkgConfigDependency.setup_env({}, env, MachineChoice.HOST, pkg_dir)
+        # Regression test: This used to modify the value of `pkg_config_path`
+        # option, adding the meson-uninstalled directory to it.
+        PkgConfigDependency.setup_env({}, env, MachineChoice.HOST, uninstalled=True)
+
         pkg_config_path = env.coredata.options[OptionKey('pkg_config_path')].value
-        self.assertEqual(len(pkg_config_path), 1)
+        self.assertEqual(pkg_config_path, [pkg_dir])
 
     @skipIfNoPkgconfig
     def test_pkgconfig_internal_libraries(self):
@@ -1597,7 +1600,7 @@ class LinuxlikeTests(BasePlatformTests):
                 if isinstance(comp, (AppleClangCCompiler, AppleClangCPPCompiler,
                                      AppleClangObjCCompiler, AppleClangObjCPPCompiler)):
                     raise SkipTest('AppleClang is currently only supported with ld64')
-                if lang != 'rust' and comp.use_linker_args('bfd') == []:
+                if lang != 'rust' and comp.use_linker_args('bfd', '') == []:
                     raise SkipTest(
                         f'Compiler {comp.id} does not support using alternative linkers')
                 self.assertEqual(comp.linker.id, expected)
@@ -1723,10 +1726,8 @@ class LinuxlikeTests(BasePlatformTests):
         testdir = os.path.join(self.unit_test_dir, '86 prelinking')
         env = get_fake_env(testdir, self.builddir, self.prefix)
         cc = detect_c_compiler(env, MachineChoice.HOST)
-        if cc.id == "gcc":
-            gccver = subprocess.check_output(['gcc', '--version'])
-            if b'7.5.0' in gccver:
-                raise SkipTest('GCC on Bionic is too old to be supported.')
+        if cc.id == "gcc" and not version_compare(cc.version, '>=9'):
+            raise SkipTest('Prelinking not supported with gcc 8 or older.')
         self.init(testdir)
         self.build()
         outlib = os.path.join(self.builddir, 'libprelinked.a')

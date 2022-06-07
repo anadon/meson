@@ -74,13 +74,14 @@ machine](#specifying-options-per-machine) section for details.
 | auto_features {enabled, disabled, auto} | auto       | Override value of all 'auto' features                          | no             | no                |
 | backend {ninja, vs,<br>vs2010, vs2012, vs2013, vs2015, vs2017, vs2019, vs2022, xcode} | ninja | Backend to use        | no             | no                |
 | buildtype {plain, debug,<br>debugoptimized, release, minsize, custom} | debug |  Build type to use                    | no             | no                |
-| debug                                | true          | Debug                                                          | no             | no                |
+| debug                                | true          | Enable debug symbols and other information                     | no             | no                |
 | default_library {shared, static, both} | shared      | Default library type                                           | no             | yes               |
 | errorlogs                            | true          | Whether to print the logs from failing tests.                  | no             | no                |
 | install_umask {preserve, 0000-0777}  | 022           | Default umask to apply on permissions of installed files       | no             | no                |
 | layout {mirror,flat}                 | mirror        | Build directory layout                                         | no             | no                |
 | optimization {0, g, 1, 2, 3, s}      | 0             | Optimization level                                             | no             | no                |
 | pkg_config_path {OS separated path}  | ''            | Additional paths for pkg-config to search before builtin paths | yes            | no                |
+| prefer_static                        | false         | Whether to try static linking before shared linking            | no             | no                |
 | cmake_prefix_path                    | []            | Additional prefixes for cmake to search before builtin paths   | yes            | no                |
 | stdsplit                             | true          | Split stdout and stderr in test logs                           | no             | no                |
 | strip                                | false         | Strip targets on install                                       | no             | no                |
@@ -141,7 +142,7 @@ available on all platforms or with all compilers:
 | b_vscrt       | from_buildtype | none, md, mdd, mt, mtd, from_buildtype, static_from_buildtype    | VS runtime library to use (since 0.48.0) (static_from_buildtype since 0.56.0) |
 
 The value of `b_sanitize` can be one of: `none`, `address`, `thread`,
-`undefined`, `memory`, `address,undefined`, but note that some
+`undefined`, `memory`, `leak`, `address,undefined`, but note that some
 compilers might not support all of them. For example Visual Studio
 only supports the address sanitizer.
 
@@ -274,6 +275,27 @@ Since 0.56.0 `warning_level` can also be defined per subproject.
 
 Some Meson modules have built-in options. They can be set by prefixing the option
 name with the module name: `-D<module>.<option>=<value>` (e.g. `-Dpython.platlibdir=/foo`).
+
+### Pkgconfig module
+
+| Option      | Default value | Possible values | Description                                                |
+|-------------|---------------|-----------------|------------------------------------------------------------|
+| relocatable | false         | true, false     | Generate the pkgconfig files as relocatable (Since 0.63.0) |
+
+*Since 0.63.0* The `pkgconfig.relocatable` option is used by the
+pkgconfig module, namely [`pkg.generate()`](Pkgconfig-module.md) and affect how the
+`prefix` in the generated pkgconfig file is set (not to be confused
+with the [install prefix](#directories)). When it is `true` the `prefix` will be
+relative to the `install_dir`. This allows the pkgconfig file to be
+moved around and still work, as long as the relative path is not
+broken. In general this allows for the whole installed package to be
+placed anywhere on the system and still work as a dependency. When it
+is set to `false` the `prefix` will be the same as the install prefix.
+
+An error will be raised if `pkgconfig.relocatable` is `true` and the
+`install_dir` for a generated pkgconfig file points outside the
+install prefix. For example if the install prefix is `/usr` and the
+`install_dir` for a pkgconfig file is `/var/lib/pkgconfig`.
 
 ### Python module
 

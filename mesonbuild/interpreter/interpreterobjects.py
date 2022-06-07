@@ -87,8 +87,9 @@ class FeatureOptionHolder(ObjectHolder[coredata.UserFeatureOption]):
     def __init__(self, option: coredata.UserFeatureOption, interpreter: 'Interpreter'):
         super().__init__(option, interpreter)
         if option and option.is_auto():
-            # TODO: we need to case here because options is not a TypedDict
-            self.held_object = T.cast('coredata.UserFeatureOption', self.env.coredata.options[OptionKey('auto_features')])
+            # TODO: we need to cast here because options is not a TypedDict
+            auto = T.cast('coredata.UserFeatureOption', self.env.coredata.options[OptionKey('auto_features')])
+            self.held_object = copy.copy(auto)
             self.held_object.name = option.name
         self.methods.update({'enabled': self.enabled_method,
                              'disabled': self.disabled_method,
@@ -479,7 +480,7 @@ class DependencyHolder(ObjectHolder[Dependency]):
         KwargInfo('default_value', (str, NoneType)),
         KwargInfo('pkgconfig_define', ContainerTypeInfo(list, str, pairs=True), default=[], listify=True),
     )
-    def variable_method(self, args: T.Tuple[T.Optional[str]], kwargs: 'kwargs.DependencyGetVariable') -> T.Union[str, T.List[str]]:
+    def variable_method(self, args: T.Tuple[T.Optional[str]], kwargs: 'kwargs.DependencyGetVariable') -> str:
         default_varname = args[0]
         if default_varname is not None:
             FeatureNew('Positional argument to dependency.get_variable()', '0.58.0').use(self.subproject, self.current_node)

@@ -550,7 +550,7 @@ class EnvironmentVariables(HoldableObject):
         curr = env.get(name)
         return separator.join(values if curr is None else values + [curr])
 
-    def get_env(self, full_env: T.Dict[str, str]) -> T.Dict[str, str]:
+    def get_env(self, full_env: T.MutableMapping[str, str]) -> T.Dict[str, str]:
         env = full_env.copy()
         for method, name, values, separator in self.envvars:
             env[name] = method(env, name, values, separator)
@@ -607,10 +607,10 @@ class Target(HoldableObject):
     def get_default_install_dir(self) -> T.Tuple[str, str]:
         raise NotImplementedError
 
-    def get_custom_install_dir(self) -> T.List[T.Union[str, bool]]:
+    def get_custom_install_dir(self) -> T.List[T.Union[str, Literal[False]]]:
         raise NotImplementedError
 
-    def get_install_dir(self) -> T.Tuple[T.Any, str, bool]:
+    def get_install_dir(self) -> T.Tuple[T.List[T.Union[str, Literal[False]]], str, Literal[False]]:
         # Find the installation directory.
         default_install_dir, install_dir_name = self.get_default_install_dir()
         outdirs = self.get_custom_install_dir()
@@ -622,7 +622,7 @@ class Target(HoldableObject):
         else:
             custom_install_dir = False
             # if outdirs is empty we need to set to something, otherwise we set
-            # only the first value to the default
+            # only the first value to the default.
             if outdirs:
                 outdirs[0] = default_install_dir
             else:
@@ -734,7 +734,7 @@ class Target(HoldableObject):
 class BuildTarget(Target):
     known_kwargs = known_build_target_kwargs
 
-    install_dir: T.List[T.Union[str, bool]]
+    install_dir: T.List[T.Union[str, Literal[False]]]
 
     def __init__(self, name: str, subdir: str, subproject: SubProject, for_machine: MachineChoice,
                  sources: T.List['SourceOutputs'], structured_sources: T.Optional[StructuredSources],
@@ -749,8 +749,8 @@ class BuildTarget(Target):
         self.external_deps: T.List[dependencies.Dependency] = []
         self.include_dirs: T.List['IncludeDirs'] = []
         self.link_language = kwargs.get('link_language')
-        self.link_targets: T.List[T.Union['BuildTarget', 'CustomTarget', 'CustomTargetIndex']] = []
-        self.link_whole_targets = []
+        self.link_targets: T.List[T.Union[SharedLibrary, StaticLibrary, 'CustomTarget', 'CustomTargetIndex']] = []
+        self.link_whole_targets: T.List[T.Union[StaticLibrary, CustomTarget, CustomTargetIndex]] = []
         self.link_depends = []
         self.added_deps = set()
         self.name_prefix_set = False
@@ -1089,7 +1089,7 @@ class BuildTarget(Target):
     def get_default_install_dir(self) -> T.Tuple[str, str]:
         return self.environment.get_libdir(), '{libdir}'
 
-    def get_custom_install_dir(self) -> T.List[T.Union[str, bool]]:
+    def get_custom_install_dir(self) -> T.List[T.Union[str, Literal[False]]]:
         return self.install_dir
 
     def get_custom_install_mode(self) -> T.Optional['FileMode']:
@@ -1259,7 +1259,7 @@ class BuildTarget(Target):
         if self.gnu_symbol_visibility != '':
             permitted = ['default', 'internal', 'hidden', 'protected', 'inlineshidden']
             if self.gnu_symbol_visibility not in permitted:
-                raise InvalidArguments('GNU symbol visibility arg {} not one of: {}'.format(self.symbol_visibility, ', '.join(permitted)))
+                raise InvalidArguments('GNU symbol visibility arg {} not one of: {}'.format(self.gnu_symbol_visibility, ', '.join(permitted)))
 
     def validate_win_subsystem(self, value: str) -> str:
         value = value.lower()
@@ -1422,8 +1422,8 @@ You probably should put it in link_with instead.''')
             if isinstance(t, (CustomTarget, CustomTargetIndex)):
                 if not t.is_linkable_target():
                     raise InvalidArguments(f'Custom target {t!r} is not linkable.')
-                if not t.get_filename().endswith('.a'):
-                    raise InvalidArguments('Can only link_whole custom targets that are .a archives.')
+                if t.links_dynamically():
+                    raise InvalidArguments('Can only link_whole custom targets that are static archives.')
                 if isinstance(self, StaticLibrary):
                     # FIXME: We could extract the .a archive to get object files
                     raise InvalidArguments('Cannot link_whole a custom target into a static library')
@@ -2153,7 +2153,9 @@ class SharedLibrary(BuildTarget):
         if self.suffix is None:
             self.suffix = suffix
         self.filename = self.filename_tpl.format(self)
-        self.outputs = [self.filename]
+        # There may have been more outputs added by the time we get here, so
+        # only replace the first entry
+        self.outputs[0] = self.filename
         if create_debug_file:
             self.debug_filename = os.path.splitext(self.filename)[0] + '.pdb'
 
@@ -2425,10 +2427,9 @@ class CustomTarget(Target, CommandBase):
                  env: T.Optional[EnvironmentVariables] = None,
                  feed: bool = False,
                  install: bool = False,
-                 install_dir: T.Optional[T.Sequence[T.Union[str, bool]]] = None,
+                 install_dir: T.Optional[T.Sequence[T.Union[str, Literal[False]]]] = None,
                  install_mode: T.Optional[FileMode] = None,
                  install_tag: T.Optional[T.Sequence[T.Optional[str]]] = None,
-                 override_options: T.Optional[T.Dict[OptionKey, str]] = None,
                  absolute_paths: bool = False,
                  backend: T.Optional['Backend'] = None,
                  ):
@@ -2454,17 +2455,11 @@ class CustomTarget(Target, CommandBase):
         self.install = install
         self.install_dir = list(install_dir or [])
         self.install_mode = install_mode
-        _install_tag: T.List[T.Optional[str]]
-        if not install_tag:
-            _install_tag = [None] * len(self.outputs)
-        elif len(install_tag) == 1:
-            _install_tag = list(install_tag) * len(self.outputs)
-        else:
-            _install_tag = list(install_tag)
+        _install_tag: T.List[T.Optional[str]] = [None] if not install_tag else stringlistify(install_tag)
+        if len(_install_tag) == 1:
+            _install_tag = list(_install_tag) * len(self.outputs)
         self.install_tag = _install_tag
         self.name = name if name else self.outputs[0]
-
-        self.set_option_overrides(override_options or {})
 
         # Whether to use absolute paths for all files on the commandline
         self.absolute_paths = absolute_paths
@@ -2510,7 +2505,7 @@ class CustomTarget(Target, CommandBase):
     def should_install(self) -> bool:
         return self.install
 
-    def get_custom_install_dir(self) -> T.List[T.Union[str, bool]]:
+    def get_custom_install_dir(self) -> T.List[T.Union[str, Literal[False]]]:
         return self.install_dir
 
     def get_custom_install_mode(self) -> T.Optional['FileMode']:
@@ -2552,6 +2547,16 @@ class CustomTarget(Target, CommandBase):
             return False
         suf = os.path.splitext(self.outputs[0])[-1]
         return suf in {'.a', '.dll', '.lib', '.so', '.dylib'}
+
+    def links_dynamically(self) -> bool:
+        """Whether this target links dynamically or statically
+
+        Does not assert the target is linkable, just that it is not shared
+
+        :return: True if is dynamically linked, otherwise False
+        """
+        suf = os.path.splitext(self.outputs[0])[-1]
+        return suf not in {'.a', '.lib'}
 
     def get_link_deps_mapping(self, prefix: str) -> T.Mapping[str, str]:
         return {}
@@ -2752,6 +2757,16 @@ class CustomTargetIndex(HoldableObject):
         suf = os.path.splitext(self.output)[-1]
         return suf in {'.a', '.dll', '.lib', '.so'}
 
+    def links_dynamically(self) -> bool:
+        """Whether this target links dynamically or statically
+
+        Does not assert the target is linkable, just that it is not shared
+
+        :return: True if is dynamically linked, otherwise False
+        """
+        suf = os.path.splitext(self.output)[-1]
+        return suf not in {'.a', '.lib'}
+
     def should_install(self) -> bool:
         return self.target.should_install()
 
@@ -2765,7 +2780,7 @@ class CustomTargetIndex(HoldableObject):
     def extract_all_objects_recurse(self) -> T.List[T.Union[str, 'ExtractedObjects']]:
         return self.target.extract_all_objects_recurse()
 
-    def get_custom_install_dir(self) -> T.List[T.Union[str, bool]]:
+    def get_custom_install_dir(self) -> T.List[T.Union[str, Literal[False]]]:
         return self.target.get_custom_install_dir()
 
 class ConfigurationData(HoldableObject):

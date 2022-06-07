@@ -1,4 +1,4 @@
-# Copyright 2012-2017 The Meson development team
+# Copyright 2012-2022 The Meson development team
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -187,8 +187,8 @@ class CLikeCompiler(Compiler):
     def get_no_optimization_args(self) -> T.List[str]:
         return ['-O0']
 
-    def get_output_args(self, target: str) -> T.List[str]:
-        return ['-o', target]
+    def get_output_args(self, outputname: str) -> T.List[str]:
+        return ['-o', outputname]
 
     def get_werror_args(self) -> T.List[str]:
         return ['-Werror']
@@ -270,8 +270,8 @@ class CLikeCompiler(Compiler):
     def get_pch_use_args(self, pch_dir: str, header: str) -> T.List[str]:
         return ['-include', os.path.basename(header)]
 
-    def get_pch_name(self, header_name: str) -> str:
-        return os.path.basename(header_name) + '.' + self.get_pch_suffix()
+    def get_pch_name(self, name: str) -> str:
+        return os.path.basename(name) + '.' + self.get_pch_suffix()
 
     def get_default_include_dirs(self) -> T.List[str]:
         return []
@@ -410,7 +410,7 @@ class CLikeCompiler(Compiler):
         if mode is CompileCheckMode.LINK:
             ld_value = env.lookup_binary_entry(self.for_machine, self.language + '_ld')
             if ld_value is not None:
-                largs += self.use_linker_args(ld_value[0])
+                largs += self.use_linker_args(ld_value[0], self.version)
 
             # Add LDFLAGS from the env
             sys_ld_args = env.coredata.get_external_link_args(self.for_machine, self.language)

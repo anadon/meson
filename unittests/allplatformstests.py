@@ -83,7 +83,7 @@ def temp_filename():
         except OSError:
             pass
 
-def _git_init(project_dir):
+def git_init(project_dir):
     # If a user has git configuration init.defaultBranch set we want to override that
     with tempfile.TemporaryDirectory() as d:
         out = git(['--version'], str(d))[1]
@@ -1165,7 +1165,7 @@ class AllPlatformTests(BasePlatformTests):
             raise SkipTest('Dist is only supported with Ninja')
 
         try:
-            self.dist_impl(_git_init, _git_add_all)
+            self.dist_impl(git_init, _git_add_all)
         except PermissionError:
             # When run under Windows CI, something (virus scanner?)
             # holds on to the git files so cleaning up the dir
@@ -1220,7 +1220,7 @@ class AllPlatformTests(BasePlatformTests):
                 project_dir = os.path.join(tmpdir, 'a')
                 shutil.copytree(os.path.join(self.unit_test_dir, '35 dist script'),
                                 project_dir)
-                _git_init(project_dir)
+                git_init(project_dir)
                 self.init(project_dir)
                 self.build('dist')
 
@@ -1635,6 +1635,39 @@ class AllPlatformTests(BasePlatformTests):
         cargs = ['-I' + incdir.as_posix(), '-DLIBFOO']
         # pkg-config and pkgconf does not respect the same order
         self.assertEqual(sorted(foo_dep.get_compile_args()), sorted(cargs))
+
+    @skipIfNoPkgconfig
+    def test_pkgconfig_relocatable(self):
+        '''
+        Test that it generates relocatable pkgconfig when module
+        option pkgconfig.relocatable=true.
+        '''
+        testdir_rel = os.path.join(self.common_test_dir, '44 pkgconfig-gen')
+        self.init(testdir_rel, extra_args=['-Dpkgconfig.relocatable=true'])
+
+        def check_pcfile(name, *, relocatable, levels=2):
+            with open(os.path.join(self.privatedir, name), encoding='utf-8') as f:
+                pcfile = f.read()
+                # The pkgconfig module always uses posix path regardless of platform
+                prefix_rel = PurePath('${pcfiledir}', *(['..'] * levels)).as_posix()
+                (self.assertIn if relocatable else self.assertNotIn)(
+                    f'prefix={prefix_rel}\n',
+                    pcfile)
+
+        check_pcfile('libvartest.pc', relocatable=True)
+        check_pcfile('libvartest2.pc', relocatable=True)
+
+        self.wipe()
+        self.init(testdir_rel, extra_args=['-Dpkgconfig.relocatable=false'])
+
+        check_pcfile('libvartest.pc', relocatable=False)
+        check_pcfile('libvartest2.pc', relocatable=False)
+
+        self.wipe()
+        testdir_abs = os.path.join(self.unit_test_dir, '105 pkgconfig relocatable with absolute path')
+        self.init(testdir_abs)
+
+        check_pcfile('libsimple.pc', relocatable=True, levels=3)
 
     def test_array_option_change(self):
         def get_opt():
@@ -2307,12 +2340,12 @@ class AllPlatformTests(BasePlatformTests):
         testdir = os.path.join(self.unit_test_dir, '40 featurenew subprojects')
         out = self.init(testdir)
         # Parent project warns correctly
-        self.assertRegex(out, "WARNING: Project targeting '>=0.45'.*'0.47.0': dict")
+        self.assertRegex(out, "WARNING: Project targets '>=0.45'.*'0.47.0': dict")
         # Subprojects warn correctly
-        self.assertRegex(out, r"foo\| .*WARNING: Project targeting '>=0.40'.*'0.44.0': disabler")
-        self.assertRegex(out, r"baz\| .*WARNING: Project targeting '!=0.40'.*'0.44.0': disabler")
+        self.assertRegex(out, r"foo\| .*WARNING: Project targets '>=0.40'.*'0.44.0': disabler")
+        self.assertRegex(out, r"baz\| .*WARNING: Project targets '!=0.40'.*'0.44.0': disabler")
         # Subproject has a new-enough meson_version, no warning
-        self.assertNotRegex(out, "WARNING: Project targeting.*Python")
+        self.assertNotRegex(out, "WARNING: Project targets.*Python")
         # Ensure a summary is printed in the subproject and the outer project
         self.assertRegex(out, r"\| WARNING: Project specifies a minimum meson_version '>=0.40'")
         self.assertRegex(out, r"\| \* 0.44.0: {'disabler'}")
@@ -2603,7 +2636,7 @@ class AllPlatformTests(BasePlatformTests):
         # Ensure that test project is in git even when running meson from tarball.
         srcdir = os.path.join(self.builddir, 'src')
         shutil.copytree(testdir, srcdir)
-        _git_init(srcdir)
+        git_init(srcdir)
         testdir = srcdir
         self.new_builddir()
 
@@ -3602,7 +3635,7 @@ class AllPlatformTests(BasePlatformTests):
             shutil.copytree(os.path.join(self.unit_test_dir, '80 wrap-git'), srcdir)
             upstream = os.path.join(srcdir, 'subprojects', 'wrap_git_upstream')
             upstream_uri = Path(upstream).as_uri()
-            _git_init(upstream)
+            git_init(upstream)
             with open(os.path.join(srcdir, 'subprojects', 'wrap_git.wrap'), 'w', encoding='utf-8') as f:
                 f.write(textwrap.dedent('''
                   [wrap-git]
@@ -3707,8 +3740,6 @@ class AllPlatformTests(BasePlatformTests):
         # This checks a bug where if a non-meson project is used as a third
         # level (or deeper) subproject it doesn't cause a rebuild if the build
         # files for that project are changed
-        if os.environ.get('MESON_CI_JOBNAME') == 'linux-bionic-gcc':
-            raise SkipTest('Unsupported CMake version')
         testdir = os.path.join(self.unit_test_dir, '84 nested subproject regenerate depends')
         cmakefile = Path(testdir) / 'subprojects' / 'sub2' / 'CMakeLists.txt'
         self.init(testdir)
@@ -4232,3 +4263,16 @@ class AllPlatformTests(BasePlatformTests):
         if self.backend is Backend.ninja:
             self.assertIn('Generating file.txt with a custom command', out)
             self.assertIn('Generating subdir/file.txt with a custom command', out)
+
+    def test_symlinked_subproject(self):
+        testdir = os.path.join(self.unit_test_dir, '106 subproject symlink')
+        subproject_dir = os.path.join(testdir, 'subprojects')
+        subproject = os.path.join(testdir, 'symlinked_subproject')
+        symlinked_subproject = os.path.join(testdir, 'subprojects', 'symlinked_subproject')
+        if not os.path.exists(subproject_dir):
+            os.mkdir(subproject_dir)
+        os.symlink(subproject, symlinked_subproject)
+        self.addCleanup(os.remove, symlinked_subproject)
+
+        self.init(testdir)
+        self.build()

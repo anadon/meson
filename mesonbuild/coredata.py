@@ -81,7 +81,7 @@ class UserOption(T.Generic[_T], HoldableObject):
         if not isinstance(yielding, bool):
             raise MesonException('Value of "yielding" must be a boolean.')
         self.yielding = yielding
-        self.deprecated: T.Union[bool, T.Dict[str, str], T.List[str]] = False
+        self.deprecated: T.Union[bool, str, T.Dict[str, str], T.List[str]] = False
 
     def listify(self, value: T.Any) -> T.List[T.Any]:
         return [value]
@@ -660,6 +660,19 @@ class CoreData:
                 return v
             newvalue = [replace(v) for v in opt.listify(value)]
             value = ','.join(newvalue)
+        elif isinstance(opt.deprecated, str):
+            # Option is deprecated and replaced by another. Note that a project
+            # option could be replaced by a built-in or module option, which is
+            # why we use OptionKey.from_string(newname) instead of
+            # key.evolve(newname). We set the value on both the old and new names,
+            # assuming they accept the same value. That could for example be
+            # achieved by adding the values from old option as deprecated on the
+            # new option, for example in the case of boolean option is replaced
+            # by a feature option with a different name.
+            newname = opt.deprecated
+            newkey = OptionKey.from_string(newname).evolve(subproject=key.subproject)
+            mlog.deprecation(f'Option {key.name!r} is replaced by {newname!r}')
+            self.set_option(newkey, value)
 
         opt.set_value(value)
 
@@ -1209,13 +1222,14 @@ BUILTIN_CORE_OPTIONS: 'MutableKeyedOptionDictType' = OrderedDict([
     (OptionKey('backend'),         BuiltinOption(UserComboOption, 'Backend to use', 'ninja', choices=backendlist)),
     (OptionKey('buildtype'),       BuiltinOption(UserComboOption, 'Build type to use', 'debug',
                                                  choices=['plain', 'debug', 'debugoptimized', 'release', 'minsize', 'custom'])),
-    (OptionKey('debug'),           BuiltinOption(UserBooleanOption, 'Debug', True)),
+    (OptionKey('debug'),           BuiltinOption(UserBooleanOption, 'Enable debug symbols and other information', True)),
     (OptionKey('default_library'), BuiltinOption(UserComboOption, 'Default library type', 'shared', choices=['shared', 'static', 'both'],
                                                  yielding=False)),
     (OptionKey('errorlogs'),       BuiltinOption(UserBooleanOption, "Whether to print the logs from failing tests", True)),
     (OptionKey('install_umask'),   BuiltinOption(UserUmaskOption, 'Default umask to apply on permissions of installed files', '022')),
     (OptionKey('layout'),          BuiltinOption(UserComboOption, 'Build directory layout', 'mirror', choices=['mirror', 'flat'])),
     (OptionKey('optimization'),    BuiltinOption(UserComboOption, 'Optimization level', '0', choices=['0', 'g', '1', '2', '3', 's'])),
+    (OptionKey('prefer_static'),   BuiltinOption(UserBooleanOption, 'Whether to try static linking before shared linking', False)),
     (OptionKey('stdsplit'),        BuiltinOption(UserBooleanOption, 'Split stdout and stderr in test logs', True)),
     (OptionKey('strip'),           BuiltinOption(UserBooleanOption, 'Strip targets on install', False)),
     (OptionKey('unity'),           BuiltinOption(UserComboOption, 'Unity build', 'off', choices=['on', 'off', 'subprojects'])),
@@ -1224,6 +1238,10 @@ BUILTIN_CORE_OPTIONS: 'MutableKeyedOptionDictType' = OrderedDict([
     (OptionKey('werror'),          BuiltinOption(UserBooleanOption, 'Treat warnings as errors', False, yielding=False)),
     (OptionKey('wrap_mode'),       BuiltinOption(UserComboOption, 'Wrap mode', 'default', choices=['default', 'nofallback', 'nodownload', 'forcefallback', 'nopromote'])),
     (OptionKey('force_fallback_for'), BuiltinOption(UserArrayOption, 'Force fallback for those subprojects', [])),
+
+    # Pkgconfig module
+    (OptionKey('relocatable', module='pkgconfig'),
+     BuiltinOption(UserBooleanOption, 'Generate pkgconfig files as relocatable', False)),
 
     # Python module
     (OptionKey('install_env', module='python'),

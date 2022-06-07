@@ -60,9 +60,7 @@ def non_msvc_eh_options(eh: str, args: T.List[str]) -> None:
                      'You may want to set eh to \'default\'.')
 
 class CPPCompiler(CLikeCompiler, Compiler):
-
-    @classmethod
-    def attribute_check_func(cls, name: str) -> str:
+    def attribute_check_func(self, name: str) -> str:
         try:
             return CXX_FUNC_ATTRIBUTES.get(name, C_FUNC_ATTRIBUTES[name])
         except KeyError:
@@ -732,6 +730,16 @@ class VisualStudioCPPCompiler(CPP11AsCPP14Mixin, VisualStudioLikeCPPCompilerMixi
             except ValueError:
                 return args
             del args[i]
+        return args
+
+    def get_always_args(self) -> T.List[str]:
+        args = super().get_always_args()
+
+        # By default, MSVC has a broken __cplusplus define that pretends to be c++98:
+        # https://docs.microsoft.com/en-us/cpp/build/reference/zc-cplusplus?view=msvc-160
+        # Pass the flag to enable a truthful define, if possible.
+        if version_compare(self.version, '>= 15.7') and '/Zc:__cplusplus' not in args:
+            return args + ['/Zc:__cplusplus']
         return args
 
 class ClangClCPPCompiler(CPP11AsCPP14Mixin, VisualStudioLikeCPPCompilerMixin, ClangClCompiler, CPPCompiler):

@@ -426,11 +426,6 @@ class TAPParser:
                 else:
                     yield self.Version(version=self.version)
                 return
-
-            if not line:
-                return
-
-            yield self.Error(f'unexpected input at line {self.lineno}')
         else:
             # end of file
             if self.state == self._YAML:
@@ -1806,7 +1801,7 @@ class TestHarness:
     def get_wrapper(options: argparse.Namespace) -> T.List[str]:
         wrap = []  # type: T.List[str]
         if options.gdb:
-            wrap = [options.gdb_path, '--quiet', '--nh']
+            wrap = [options.gdb_path, '--quiet']
             if options.repeat > 1:
                 wrap += ['-ex', 'run', '-ex', 'quit']
             # Signal the end of arguments to gdb

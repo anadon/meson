@@ -1,4 +1,4 @@
-# Copyright 2012-2021 The Meson development team
+# Copyright 2012-2022 The Meson development team
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,9 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
 from ..mesonlib import (
-    MachineChoice, MesonException, EnvironmentException,
+    MesonException, EnvironmentException,
     search_version, is_windows, Popen_safe, windows_proof_rm,
 )
 from ..envconfig import BinaryTable
@@ -40,7 +41,6 @@ from ..linkers import (
     NvidiaHPC_DynamicLinker,
     PGIDynamicLinker,
     PGIStaticLinker,
-    StaticLinker,
     Xc16Linker,
     Xc16DynamicLinker,
     XilinkDynamicLinker,
@@ -50,9 +50,7 @@ from ..linkers import (
     VisualStudioLikeLinkerMixin,
     WASMDynamicLinker,
 )
-from .compilers import Compiler
 from .c import (
-    CCompiler,
     AppleClangCCompiler,
     ArmCCompiler,
     ArmclangCCompiler,
@@ -74,7 +72,6 @@ from .c import (
     VisualStudioCCompiler,
 )
 from .cpp import (
-    CPPCompiler,
     AppleClangCPPCompiler,
     ArmCPPCompiler,
     ArmclangCPPCompiler,
@@ -102,7 +99,6 @@ from .d import (
 )
 from .cuda import CudaCompiler
 from .fortran import (
-    FortranCompiler,
     ArmLtdFlangFortranCompiler,
     G95FortranCompiler,
     GnuFortranCompiler,
@@ -119,13 +115,11 @@ from .fortran import (
 )
 from .java import JavaCompiler
 from .objc import (
-    ObjCCompiler,
     AppleClangObjCCompiler,
     ClangObjCCompiler,
     GnuObjCCompiler,
 )
 from .objcpp import (
-    ObjCPPCompiler,
     AppleClangObjCPPCompiler,
     ClangObjCPPCompiler,
     GnuObjCPPCompiler,
@@ -148,7 +142,15 @@ import os
 import typing as T
 
 if T.TYPE_CHECKING:
+    from .compilers import Compiler
+    from .c import CCompiler
+    from .cpp import CPPCompiler
+    from .fortran import FortranCompiler
+    from .objc import ObjCCompiler
+    from .objcpp import ObjCPPCompiler
+    from ..linkers import StaticLinker
     from ..environment import Environment
+    from ..mesonlib import MachineChoice
     from ..programs import ExternalProgram
 
 
@@ -451,7 +453,7 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
                 version = _get_gnu_version_from_defines(defines)
                 cls = GnuCCompiler if lang == 'c' else GnuCPPCompiler
 
-            linker = guess_nix_linker(env, compiler, cls, for_machine)
+            linker = guess_nix_linker(env, compiler, cls, version, for_machine)
 
             return cls(
                 ccache + compiler, version, for_machine, is_cross,
@@ -487,7 +489,7 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
                 cls = ArmLtdClangCCompiler
             elif lang == 'cpp':
                 cls = ArmLtdClangCPPCompiler
-            linker = guess_nix_linker(env, compiler, cls, for_machine)
+            linker = guess_nix_linker(env, compiler, cls, version, for_machine)
             return cls(
                 ccache + compiler, version, for_machine, is_cross, info,
                 exe_wrap, linker=linker)
@@ -526,7 +528,7 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
             else:
                 target = 'unknown target'
             cls = ClangClCCompiler if lang == 'c' else ClangClCPPCompiler
-            linker = guess_win_linker(env, ['lld-link'], cls, for_machine)
+            linker = guess_win_linker(env, ['lld-link'], cls, version, for_machine)
             return cls(
                 compiler, version, for_machine, is_cross, info, target,
                 exe_wrap, linker=linker)
@@ -547,11 +549,11 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
                 # style ld, but for clang on "real" windows we'll use
                 # either link.exe or lld-link.exe
                 try:
-                    linker = guess_win_linker(env, compiler, cls, for_machine, invoked_directly=False)
+                    linker = guess_win_linker(env, compiler, cls, version, for_machine, invoked_directly=False)
                 except MesonException:
                     pass
             if linker is None:
-                linker = guess_nix_linker(env, compiler, cls, for_machine)
+                linker = guess_nix_linker(env, compiler, cls, version, for_machine)
 
             return cls(
                 ccache + compiler, version, for_machine, is_cross, info,
@@ -585,7 +587,7 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
                 m = f'Failed to detect MSVC compiler target architecture: \'cl /?\' output is\n{cl_signature}'
                 raise EnvironmentException(m)
             cls = VisualStudioCCompiler if lang == 'c' else VisualStudioCPPCompiler
-            linker = guess_win_linker(env, ['link'], cls, for_machine)
+            linker = guess_win_linker(env, ['link'], cls, version, for_machine)
             # As of this writing, CCache does not support MSVC but sccache does.
             if 'sccache' in ccache:
                 final_compiler = ccache + compiler
@@ -610,7 +612,7 @@ def _detect_c_or_cpp_compiler(env: 'Environment', lang: str, for_machine: Machin
                 info, exe_wrap, linker=linker)
         if '(ICC)' in out:
             cls = IntelCCompiler if lang == 'c' else IntelCPPCompiler
-            l = guess_nix_linker(env, compiler, cls, for_machine)
+            l = guess_nix_linker(env, compiler, cls, version, for_machine)
             return cls(
                 ccache + compiler, version, for_machine, is_cross, info,
                 exe_wrap, full_version=full_version, linker=l)
@@ -734,14 +736,14 @@ def detect_fortran_compiler(env: 'Environment', for_machine: MachineChoice) -> C
                 if guess_gcc_or_lcc == 'lcc':
                     version = _get_lcc_version_from_defines(defines)
                     cls = ElbrusFortranCompiler
-                    linker = guess_nix_linker(env, compiler, cls, for_machine)
+                    linker = guess_nix_linker(env, compiler, cls, version, for_machine)
                     return cls(
                         compiler, version, for_machine, is_cross, info,
                         exe_wrap, defines, full_version=full_version, linker=linker)
                 else:
                     version = _get_gnu_version_from_defines(defines)
                     cls = GnuFortranCompiler
-                    linker = guess_nix_linker(env, compiler, cls, for_machine)
+                    linker = guess_nix_linker(env, compiler, cls, version, for_machine)
                     return cls(
                         compiler, version, for_machine, is_cross, info,
                         exe_wrap, defines, full_version=full_version, linker=linker)
@@ -753,13 +755,13 @@ def detect_fortran_compiler(env: 'Environment', for_machine: MachineChoice) -> C
                 arm_ver_minor = arm_ver_match.group(2)
                 arm_ver_build = arm_ver_match.group(3)
                 version = '.'.join([arm_ver_major, arm_ver_minor, arm_ver_build])
-                linker = guess_nix_linker(env, compiler, cls, for_machine)
+                linker = guess_nix_linker(env, compiler, cls, version, for_machine)
                 return cls(
                     ccache + compiler, version, for_machine, is_cross, info,
                     exe_wrap, linker=linker)
             if 'G95' in out:
                 cls = G95FortranCompiler
-                linker = guess_nix_linker(env, compiler, cls, for_machine)
+                linker = guess_nix_linker(env, compiler, cls, version, for_machine)
                 return G95FortranCompiler(
                     compiler, version, for_machine, is_cross, info,
                     exe_wrap, full_version=full_version, linker=linker)
@@ -767,7 +769,7 @@ def detect_fortran_compiler(env: 'Environment', for_machine: MachineChoice) -> C
             if 'Sun Fortran' in err:
                 version = search_version(err)
                 cls = SunFortranCompiler
-                linker = guess_nix_linker(env, compiler, cls, for_machine)
+                linker = guess_nix_linker(env, compiler, cls, version, for_machine)
                 return SunFortranCompiler(
                     compiler, version, for_machine, is_cross, info,
                     exe_wrap, full_version=full_version, linker=linker)
@@ -783,7 +785,7 @@ def detect_fortran_compiler(env: 'Environment', for_machine: MachineChoice) -> C
                     target, exe_wrap, linker=linker)
 
             if 'ifort (IFORT)' in out:
-                linker = guess_nix_linker(env, compiler, IntelFortranCompiler, for_machine)
+                linker = guess_nix_linker(env, compiler, IntelFortranCompiler, version, for_machine)
                 return IntelFortranCompiler(
                     compiler, version, for_machine, is_cross, info,
                     exe_wrap, full_version=full_version, linker=linker)
@@ -813,14 +815,14 @@ def detect_fortran_compiler(env: 'Environment', for_machine: MachineChoice) -> C
 
             if 'flang' in out or 'clang' in out:
                 linker = guess_nix_linker(env,
-                                          compiler, FlangFortranCompiler, for_machine)
+                                          compiler, FlangFortranCompiler, version, for_machine)
                 return FlangFortranCompiler(
                     compiler, version, for_machine, is_cross, info,
                     exe_wrap, full_version=full_version, linker=linker)
 
             if 'Open64 Compiler Suite' in err:
                 linker = guess_nix_linker(env,
-                                          compiler, Open64FortranCompiler, for_machine)
+                                          compiler, Open64FortranCompiler, version, for_machine)
                 return Open64FortranCompiler(
                     compiler, version, for_machine, is_cross, info,
                     exe_wrap, full_version=full_version, linker=linker)
@@ -868,7 +870,7 @@ def _detect_objc_or_objcpp_compiler(env: 'Environment', for_machine: MachineChoi
                 continue
             version = _get_gnu_version_from_defines(defines)
             comp = GnuObjCCompiler if objc else GnuObjCPPCompiler
-            linker = guess_nix_linker(env, compiler, comp, for_machine)
+            linker = guess_nix_linker(env, compiler, comp, version, for_machine)
             return comp(
                 ccache + compiler, version, for_machine, is_cross, info,
                 exe_wrap, defines, linker=linker)
@@ -885,12 +887,12 @@ def _detect_objc_or_objcpp_compiler(env: 'Environment', for_machine: MachineChoi
             if 'windows' in out or env.machines[for_machine].is_windows():
                 # If we're in a MINGW context this actually will use a gnu style ld
                 try:
-                    linker = guess_win_linker(env, compiler, comp, for_machine)
+                    linker = guess_win_linker(env, compiler, comp, version, for_machine)
                 except MesonException:
                     pass
 
             if not linker:
-                linker = guess_nix_linker(env, compiler, comp, for_machine)
+                linker = guess_nix_linker(env, compiler, comp, version, for_machine)
             return comp(
                 ccache + compiler, version, for_machine,
                 is_cross, info, exe_wrap, linker=linker, defines=defines)
@@ -1057,7 +1059,7 @@ def detect_rust_compiler(env: 'Environment', for_machine: MachineChoice) -> Rust
                 extra_args: T.Dict[str, T.Union[str, bool]] = {}
                 always_args: T.List[str] = []
                 if is_link_exe:
-                    compiler.extend(cls.use_linker_args(cc.linker.exelist[0]))
+                    compiler.extend(cls.use_linker_args(cc.linker.exelist[0], ''))
                     extra_args['direct'] = True
                     extra_args['machine'] = cc.linker.machine
                 else:
@@ -1065,7 +1067,7 @@ def detect_rust_compiler(env: 'Environment', for_machine: MachineChoice) -> Rust
                     if 'ccache' in exelist[0]:
                         del exelist[0]
                     c = exelist.pop(0)
-                    compiler.extend(cls.use_linker_args(c))
+                    compiler.extend(cls.use_linker_args(c, ''))
 
                     # Also ensure that we pass any extra arguments to the linker
                     for l in exelist:
@@ -1084,12 +1086,12 @@ def detect_rust_compiler(env: 'Environment', for_machine: MachineChoice) -> Rust
                                              **extra_args)
             elif 'link' in override[0]:
                 linker = guess_win_linker(env,
-                                          override, cls, for_machine, use_linker_prefix=False)
+                                          override, cls, version, for_machine, use_linker_prefix=False)
                 # rustc takes linker arguments without a prefix, and
                 # inserts the correct prefix itself.
                 assert isinstance(linker, VisualStudioLikeLinkerMixin)
                 linker.direct = True
-                compiler.extend(cls.use_linker_args(linker.exelist[0]))
+                compiler.extend(cls.use_linker_args(linker.exelist[0], ''))
             else:
                 # On linux and macos rust will invoke the c compiler for
                 # linking, on windows it will use lld-link or link.exe.
@@ -1101,7 +1103,7 @@ def detect_rust_compiler(env: 'Environment', for_machine: MachineChoice) -> Rust
                 # Of course, we're not going to use any of that, we just
                 # need it to get the proper arguments to pass to rustc
                 c = linker.exelist[1] if linker.exelist[0].endswith('ccache') else linker.exelist[0]
-                compiler.extend(cls.use_linker_args(c))
+                compiler.extend(cls.use_linker_args(c, ''))
 
             env.coredata.add_lang_args(cls.language, cls, for_machine, env)
             return cls(
@@ -1160,7 +1162,7 @@ def detect_d_compiler(env: 'Environment', for_machine: MachineChoice) -> Compile
                     objfile = os.path.basename(f)[:-1] + 'obj'
                     linker = guess_win_linker(env,
                                               exelist,
-                                              LLVMDCompiler, for_machine,
+                                              LLVMDCompiler, full_version, for_machine,
                                               use_linker_prefix=True, invoked_directly=False,
                                               extra_args=[f])
                 else:
@@ -1168,7 +1170,7 @@ def detect_d_compiler(env: 'Environment', for_machine: MachineChoice) -> Compile
                     # Clean it up.
                     objfile = os.path.basename(f)[:-1] + 'o'
                     linker = guess_nix_linker(env,
-                                              exelist, LLVMDCompiler, for_machine,
+                                              exelist, LLVMDCompiler, full_version, for_machine,
                                               extra_args=[f])
             finally:
                 windows_proof_rm(f)
@@ -1178,7 +1180,7 @@ def detect_d_compiler(env: 'Environment', for_machine: MachineChoice) -> Compile
                 exelist, version, for_machine, info, arch,
                 full_version=full_version, linker=linker, version_output=out)
         elif 'gdc' in out:
-            linker = guess_nix_linker(env, exelist, GnuDCompiler, for_machine)
+            linker = guess_nix_linker(env, exelist, GnuDCompiler, version, for_machine)
             return GnuDCompiler(
                 exelist, version, for_machine, info, arch,
                 exe_wrapper=exe_wrap, is_cross=is_cross,
@@ -1198,12 +1200,12 @@ def detect_d_compiler(env: 'Environment', for_machine: MachineChoice) -> Compile
                 if info.is_windows() or info.is_cygwin():
                     objfile = os.path.basename(f)[:-1] + 'obj'
                     linker = guess_win_linker(env,
-                                              exelist, DmdDCompiler, for_machine,
+                                              exelist, DmdDCompiler, full_version, for_machine,
                                               invoked_directly=False, extra_args=[f, arch_arg])
                 else:
                     objfile = os.path.basename(f)[:-1] + 'o'
                     linker = guess_nix_linker(env,
-                                              exelist, DmdDCompiler, for_machine,
+                                              exelist, DmdDCompiler, full_version, for_machine,
                                               extra_args=[f, arch_arg])
             finally:
                 windows_proof_rm(f)
@@ -1234,7 +1236,7 @@ def detect_swift_compiler(env: 'Environment', for_machine: MachineChoice) -> Com
         # As for 5.0.1 swiftc *requires* a file to check the linker:
         with tempfile.NamedTemporaryFile(suffix='.swift') as f:
             linker = guess_nix_linker(env,
-                                      exelist, SwiftCompiler, for_machine,
+                                      exelist, SwiftCompiler, version, for_machine,
                                       extra_args=[f.name])
         return SwiftCompiler(
             exelist, version, for_machine, is_cross, info, linker=linker)

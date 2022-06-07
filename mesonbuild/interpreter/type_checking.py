@@ -268,13 +268,20 @@ def _output_validator(outputs: T.List[str]) -> T.Optional[str]:
 
     return None
 
-CT_OUTPUT_KW: KwargInfo[T.List[str]] = KwargInfo(
+MULTI_OUTPUT_KW: KwargInfo[T.List[str]] = KwargInfo(
     'output',
     ContainerTypeInfo(list, str, allow_empty=False),
     listify=True,
     required=True,
     default=[],
     validator=_output_validator,
+)
+
+OUTPUT_KW: KwargInfo[str] = KwargInfo(
+    'output',
+    str,
+    required=True,
+    validator=lambda x: _output_validator([x])
 )
 
 CT_INPUT_KW: KwargInfo[T.List[T.Union[str, File, ExternalProgram, BuildTarget, CustomTarget, CustomTargetIndex, ExtractedObjects, GeneratedList]]] = KwargInfo(
@@ -297,11 +304,12 @@ INSTALL_TAG_KW: KwargInfo[T.Optional[str]] = KwargInfo('install_tag', (str, None
 
 INSTALL_KW = KwargInfo('install', bool, default=False)
 
-CT_INSTALL_DIR_KW: KwargInfo[T.List[T.Union[str, bool]]] = KwargInfo(
+CT_INSTALL_DIR_KW: KwargInfo[T.List[T.Union[str, Literal[False]]]] = KwargInfo(
     'install_dir',
     ContainerTypeInfo(list, (str, bool)),
     listify=True,
     default=[],
+    validator=lambda x: 'must be `false` if boolean' if True in x else None,
 )
 
 CT_BUILD_BY_DEFAULT: KwargInfo[T.Optional[bool]] = KwargInfo('build_by_default', (bool, type(None)), since='0.40.0')
@@ -317,6 +325,8 @@ CT_BUILD_ALWAYS_STALE: KwargInfo[T.Optional[bool]] = KwargInfo(
     since='0.47.0',
 )
 
+INSTALL_DIR_KW: KwargInfo[T.Optional[str]] = KwargInfo('install_dir', (str, NoneType))
+
 INCLUDE_DIRECTORIES: KwargInfo[T.List[T.Union[str, IncludeDirs]]] = KwargInfo(
     'include_dirs',
     ContainerTypeInfo(list, (str, IncludeDirs)),
@@ -327,7 +337,7 @@ INCLUDE_DIRECTORIES: KwargInfo[T.List[T.Union[str, IncludeDirs]]] = KwargInfo(
 # for cases like default_options and override_options
 DEFAULT_OPTIONS: KwargInfo[T.List[str]] = KwargInfo(
     'default_options',
-    ContainerTypeInfo(list, (str, IncludeDirs)),
+    ContainerTypeInfo(list, str),
     listify=True,
     default=[],
     validator=_options_validator,
@@ -336,4 +346,4 @@ DEFAULT_OPTIONS: KwargInfo[T.List[str]] = KwargInfo(
 ENV_METHOD_KW = KwargInfo('method', str, default='set', since='0.62.0',
     validator=in_set_validator({'set', 'prepend', 'append'}))
 
-ENV_SEPARATOR_KW = KwargInfo('separator', str, default=os.pathsep, since='0.62.0')
+ENV_SEPARATOR_KW = KwargInfo('separator', str, default=os.pathsep)

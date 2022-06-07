@@ -1,4 +1,4 @@
-# Copyright 2012-2019 The Meson development team
+# Copyright 2012-2022 The Meson development team
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ base_options: 'KeyedOptionDictType' = {
                                                       ['default', 'thin'],
                                                       'default'),
     OptionKey('b_sanitize'): coredata.UserComboOption('Code sanitizer to use',
-                                                      ['none', 'address', 'thread', 'undefined', 'memory', 'address,undefined'],
+                                                      ['none', 'address', 'thread', 'undefined', 'memory', 'leak', 'address,undefined'],
                                                       'none'),
     OptionKey('b_lundef'): coredata.UserBooleanOption('Use -Wl,--no-undefined when linking', True),
     OptionKey('b_asneeded'): coredata.UserBooleanOption('Use -Wl,--as-needed when linking', True),
@@ -1030,7 +1030,7 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
         return dep.get_link_args()
 
     @classmethod
-    def use_linker_args(cls, linker: str) -> T.List[str]:
+    def use_linker_args(cls, linker: str, version: str) -> T.List[str]:
         """Get a list of arguments to pass to the compiler to set the linker.
         """
         return []
@@ -1292,6 +1292,9 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
     def get_no_warn_args(self) -> T.List[str]:
         """Arguments to completely disable warnings."""
         return []
+
+    def needs_static_linker(self) -> bool:
+        raise NotImplementedError(f'There is no static linker for {self.language}')
 
 
 def get_global_options(lang: str,

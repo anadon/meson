@@ -186,12 +186,20 @@ class PythonSystemDependency(SystemDependency, _PythonDependencyBase):
     def _get_windows_link_args(self) -> T.Optional[T.List[str]]:
         if self.platform.startswith('win'):
             vernum = self.variables.get('py_version_nodot')
+            verdot = self.variables.get('py_version_short')
+            imp_lower = self.variables.get('implementation_lower', 'python')
             if self.static:
                 libpath = Path('libs') / f'libpython{vernum}.a'
             else:
                 comp = self.get_compiler()
                 if comp.id == "gcc":
-                    libpath = Path(f'python{vernum}.dll')
+                    if imp_lower == 'pypy' and verdot == '3.8':
+                        # The naming changed between 3.8 and 3.9
+                        libpath = Path(f'libpypy3-c.dll')
+                    elif imp_lower == 'pypy':
+                        libpath = Path(f'libpypy{verdot}-c.dll')
+                    else:
+                        libpath = Path(f'python{vernum}.dll')
                 else:
                     libpath = Path('libs') / f'python{vernum}.lib'
             # base_prefix to allow for virtualenvs.
@@ -408,8 +416,13 @@ class PythonExternalProgram(ExternalProgram):
 
     def sanity(self, state: T.Optional['ModuleState'] = None) -> bool:
         # Sanity check, we expect to have something that at least quacks in tune
-        cmd = self.get_command() + ['-c', INTROSPECT_COMMAND]
+        from tempfile import NamedTemporaryFile
+        with NamedTemporaryFile(suffix='.py', delete=False, mode='w', encoding='utf-8') as tf:
+            tmpfilename = tf.name
+            tf.write(INTROSPECT_COMMAND)
+        cmd = self.get_command() + [tmpfilename]
         p, stdout, stderr = mesonlib.Popen_safe(cmd)
+        os.unlink(tmpfilename)
         try:
             info = json.loads(stdout)
         except json.JSONDecodeError:
@@ -519,6 +532,10 @@ class PythonInstallation(ExternalProgramHolder):
 
         kwargs['name_prefix'] = ''
         kwargs['name_suffix'] = suffix
+
+        if 'gnu_symbol_visibility' not in kwargs and \
+                (self.is_pypy or mesonlib.version_compare(self.version, '>=3.9')):
+            kwargs['gnu_symbol_visibility'] = 'inlineshidden'
 
         return self.interpreter.func_shared_module(None, args, kwargs)
 
@@ -643,7 +660,7 @@ class PythonModule(ExtensionModule):
         else:
             return None
 
-    def _find_installation_impl(self, state: 'ModuleState', display_name: str, name_or_path: str) -> ExternalProgram:
+    def _find_installation_impl(self, state: 'ModuleState', display_name: str, name_or_path: str, required: bool) -> ExternalProgram:
         if not name_or_path:
             python = PythonExternalProgram('python3', mesonlib.python_command)
         else:
@@ -663,10 +680,17 @@ class PythonModule(ExtensionModule):
             if not python.found() and name_or_path in ['python2', 'python3']:
                 python = PythonExternalProgram('python')
 
-        if python.found() and not python.sanity(state):
-            python = NonExistingExternalProgram()
+        if python.found():
+            if python.sanity(state):
+                return python
+            else:
+                sanitymsg = f'{python} is not a valid python or it is missing distutils'
+                if required:
+                    raise mesonlib.MesonException(sanitymsg)
+                else:
+                    mlog.warning(sanitymsg, location=state.current_node)
 
-        return python
+        return NonExistingExternalProgram()
 
     @disablerIfNotFound
     @typed_pos_args('python.find_installation', optargs=[str])
@@ -700,17 +724,29 @@ class PythonModule(ExtensionModule):
 
         python = self.installations.get(name_or_path)
         if not python:
-            python = self._find_installation_impl(state, display_name, name_or_path)
+            python = self._find_installation_impl(state, display_name, name_or_path, required)
             self.installations[name_or_path] = python
 
         want_modules = kwargs['modules']
         found_modules: T.List[str] = []
         missing_modules: T.List[str] = []
         if python.found() and want_modules:
+            # Python 3.8.x or later require add_dll_directory() to be called on Windows if
+            # the needed modules require external DLLs that are not bundled with the modules.
+            # Simplify things by calling add_dll_directory() on the paths in %PATH%
+            add_paths_cmd = ''
+            if hasattr(os, 'add_dll_directory'):
+                add_paths_cmds = []
+                paths = os.environ['PATH'].split(os.pathsep)
+                for path in paths:
+                    if path != '' and os.path.isdir(path):
+                        add_paths_cmds.append(f'os.add_dll_directory({path!r})')
+                add_paths_cmd = 'import os;' + ';'.join(reversed(add_paths_cmds)) + ';'
+
             for mod in want_modules:
                 p, *_ = mesonlib.Popen_safe(
                     python.command +
-                    ['-c', f'import {mod}'])
+                    ['-c', f'{add_paths_cmd}import {mod}'])
                 if p.returncode != 0:
                     missing_modules.append(mod)
                 else:

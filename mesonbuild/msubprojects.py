@@ -52,10 +52,10 @@ ALL_TYPES_STRING = ', '.join(ALL_TYPES)
 def read_archive_files(path: Path, base_path: Path) -> T.Set[Path]:
     if path.suffix == '.zip':
         with zipfile.ZipFile(path, 'r') as zip_archive:
-            archive_files = set(base_path / i.filename for i in zip_archive.infolist())
+            archive_files = {base_path / i.filename for i in zip_archive.infolist()}
     else:
         with tarfile.open(path) as tar_archive: # [ignore encoding]
-            archive_files = set(base_path / i.name for i in tar_archive)
+            archive_files = {base_path / i.name for i in tar_archive}
     return archive_files
 
 class Logger:
@@ -205,6 +205,7 @@ class Runner:
             self.git_stash()
             self.git_output(['reset', '--hard', 'FETCH_HEAD'])
             self.wrap_resolver.apply_patch()
+            self.wrap_resolver.apply_diff_files()
         except GitException as e:
             self.log('  -> Could not reset', mlog.bold(self.repo_dir), 'to', mlog.bold(revision))
             self.log(mlog.red(e.output))
