@@ -1599,10 +1599,7 @@ class NinjaBackend(backends.Backend):
 
     def generate_cython_transpile(self, target: build.BuildTarget) -> \
             T.Tuple[T.MutableMapping[str, File], T.MutableMapping[str, File], T.List[str]]:
-        """Generate rules for transpiling Cython files to C or C++
-
-        XXX: Currently only C is handled.
-        """
+        """Generate rules for transpiling Antlr4 grammars files various languages"""
         static_sources: T.MutableMapping[str, File] = OrderedDict()
         generated_sources: T.MutableMapping[str, File] = OrderedDict()
         cython_sources: T.List[str] = []
@@ -1665,27 +1662,33 @@ class NinjaBackend(backends.Backend):
         """
         static_sources: T.MutableMapping[str, File] = OrderedDict()
         generated_sources: T.MutableMapping[str, File] = OrderedDict()
-        cython_sources: T.List[str] = []
+        antlr4_sources: T.List[str] = []
 
         antlr4 = target.compilers['antlr4']
 
         args: T.List[str] = []
-        args += cython.get_always_args()
-        args += cython.get_buildtype_args(target.get_option(OptionKey('buildtype')))
-        args += cython.get_debug_args(target.get_option(OptionKey('debug')))
-        args += cython.get_optimization_args(target.get_option(OptionKey('optimization')))
-        args += cython.get_option_compile_args(target.get_options())
-        args += self.build.get_global_args(cython, target.for_machine)
-        args += self.build.get_project_args(cython, target.subproject, target.for_machine)
-        args += target.get_extra_args('cython')
+        args += antlr4.get_always_args()
+        opt1 = OptionKey("buildtype")
+        print("====================================================================")
+        print(opt1)
+        opt2 = target.get_option(opt1)
+        print(opt2)
+        args += antlr4.get_buildtype_args(opt2)
+        # args += antlr4.get_buildtype_args(target.get_option(OptionKey('buildtype')))
+        args += antlr4.get_debug_args(target.get_option(OptionKey('debug')))
+        args += antlr4.get_optimization_args(target.get_option(OptionKey('optimization')))
+        args += antlr4.get_option_compile_args(target.get_options())
+        args += self.build.get_global_args(antlr4, target.for_machine)
+        args += self.build.get_project_args(antlr4, target.subproject, target.for_machine)
+        args += target.get_extra_args('antlr4')
 
-        ext = target.get_option(OptionKey('language', machine=target.for_machine, lang='cython'))
+        ext = target.get_option(OptionKey('language', machine=target.for_machine, lang='antlr4'))
 
         for src in target.get_sources():
             if src.endswith('.g4'):
                 output = os.path.join(self.get_target_private_dir(target), f'{src}.{ext}')
                 args = args.copy()
-                args += cython.get_output_args(output)
+                args += antlr4.get_output_args(output)
                 element = NinjaBuildElement(
                     self.all_outputs, [output],
                     self.compiler_to_rule_name(antlr4),
@@ -1693,7 +1696,7 @@ class NinjaBackend(backends.Backend):
                 element.add_item('ARGS', args)
                 self.add_build(element)
                 # TODO: introspection?
-                cython_sources.append(output)
+                antlr4_sources.append(output)
             else:
                 static_sources[src.rel_to_builddir(self.build_to_src)] = src
 
@@ -1706,19 +1709,19 @@ class NinjaBackend(backends.Backend):
                 if ssrc.endswith('.g4'):
                     args = args.copy()
                     output = os.path.join(self.get_target_private_dir(target), f'{ssrc}.{ext}')
-                    args += cython.get_output_args(output)
+                    args += antlr4.get_output_args(output)
                     element = NinjaBuildElement(
                         self.all_outputs, [output],
-                        self.compiler_to_rule_name(cython),
+                        self.compiler_to_rule_name(antlr4),
                         [ssrc])
                     element.add_item('ARGS', args)
                     self.add_build(element)
                     # TODO: introspection?
-                    cython_sources.append(output)
+                    antlr4_sources.append(output)
                 else:
                     generated_sources[ssrc] = mesonlib.File.from_built_file(gen.get_subdir(), ssrc)
 
-        return static_sources, generated_sources, cython_sources
+        return static_sources, generated_sources, antlr4_sources
 
     def _generate_copy_target(self, src: 'mesonlib.FileOrString', output: Path) -> None:
         """Create a target to copy a source file from one location to another."""

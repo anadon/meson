@@ -69,13 +69,15 @@ class Antlr4Transpiler(Compiler):
             is_cross=is_cross,
         )
 
+        self.target_languages = ['dart', 'c#','c++','go','java','js','python','php','swift']
+
         # -Dlanguage=
         self.language_key = OptionKey(
             "language", machine=self.for_machine, lang=self.language
         )
         self.language_options = coredata.UserComboOption(
             "Set the grammar to transpile to dart c#, c++, go, java, js, python, php, or swift files.",
-            list(antlr4_buildtype_args.keys()),
+            list(self.target_languages),
             "java",
         )
 
@@ -228,6 +230,10 @@ class Antlr4Transpiler(Compiler):
         # -XdbgST             launch StringTemplate visualizer on generated code
         self.debug_string_template_visualizer_key = OptionKey(
             "XdbgST", machine=self.for_machine, lang=self.language
+        )
+        # -debug FIXME required when it shouldn't be.
+        self.debug_key = OptionKey(
+            "debug", machine=self.for_machine, lang=self.language
         )
         self.debug_string_template_visualizer_options = coredata.UserBooleanOption(
             "Launch StringTemplate visualizer on generated code.",
@@ -472,6 +478,7 @@ class Antlr4Transpiler(Compiler):
                 self.x_force_atn_key: self.x_force_atn_options,
                 self.x_log_key: self.x_log_options,
                 self.x_exact_output_dir_key: self.x_exact_output_dir_options,
+                self.debug_key: self.debug_string_template_visualizer_options, # dead line to try and get to running tests FIXME
             }
         )
         return opts
@@ -485,76 +492,94 @@ class Antlr4Transpiler(Compiler):
 
         args.append(f"-Dlanguage={options[self.language_key].value}")
 
-        tmp = options[super_class_key].value
+        tmp = options[self.super_class_key].value
         if tmp:
             args.append(f"-DsuperClass={tmp}")
 
-        tmp = options[token_vocab_key].value
+        tmp = options[self.token_vocab_key].value
         if tmp:
             args.append(f"-DtokenVocab={tmp}")
 
-        tmp = options[token_label_type_key].value
+        tmp = options[self.token_label_type_key].value
         if tmp:
             args.append(f"-DTokenLabelType={tmp}")
 
-        tmp = options[context_super_class_key].value
+        tmp = options[self.context_super_class_key].value
         if tmp:
             args.append(f"-DcontextSuperClass={tmp}")
 
-        tmp = options[case_insensitive_key].value
+        tmp = options[self.case_insensitive_key].value
         if tmp:
             args.append(f"-DcaseInsensitive={tmp}")
 
-        tmp = options[lib_key].value
+        tmp = options[self.lib_key].value
         if tmp:
             args.extend(["-lib", tmp])
 
-        tmp = options[atn_key].value
+        tmp = options[self.atn_key].value
         if tmp:
             args.append(f"-atn")
 
-        tmp = options[encoding_key].value
+        tmp = options[self.encoding_key].value
         if tmp:
             args.extend(["-encoding", tmp])
 
-        tmp = options[message_format_key].value
+        tmp = options[self.message_format_key].value
         if tmp:
             args.extend(["-message-format", tmp])
 
-        if options[long_messages_key].value:
+        if options[self.long_messages_key].value:
             args.append("-long-messages")
 
-        tmp = options[generate_listener_key].value
+        tmp = options[self.generate_listener_key].value
         if not tmp:
             args.append("-no-listener")
 
-        tmp = options[generate_visitor_key].value
+        tmp = options[self.generate_visitor_key].value
         if tmp:
             args.append("-visitor")
 
-        tmp = options[package_key].value
+        tmp = options[self.package_key].value
         if tmp:
             args.extend(["-package", tmp])
 
-        if options[depend_key].value:
+        if options[self.depend_key].value:
             args.append("-depend")
 
-        if options[warnings_are_errors_key].value:
-            args.append("-Werror")
+        # FIXME: re-enable
+        # if options[self.warnings_are_errors_key].value:
+            # args.append("-Werror")
 
-        if options[debug_string_template_visualizer_key].value:
+        if options[self.debug_string_template_visualizer_key].value:
             args.append("-XdbgST")
 
-        if options[debug_string_template_visualizer_wait_key].value:
+        if options[self.debug_string_template_visualizer_wait_key].value:
             args.append("-XdbgSTWait")
 
-        if options[x_force_atn_key].value:
+        if options[self.x_force_atn_key].value:
             args.append("-Xforce-atn")
 
-        if options[x_log_key].value:
+        if options[self.x_log_key].value:
             args.append("-Xlog")
 
-        if options[x_exact_output_dir_key].value:
+        if options[self.x_exact_output_dir_key].value:
             args.append("-Xexact-output-dir")
 
         return args
+
+
+# Not sure about these functions.
+# In particular, the compilers parent class referrs to a 'linker' and this
+# isn't a useful concept in Antlr4.
+
+    def get_linker_exelist(self) -> T.List[str]:
+        return []
+
+    def can_linker_accept_rsp(self) -> bool:
+        """
+        Determines whether the linker can accept arguments using the @rsp syntax.
+        """
+        return False
+
+    def get_linker_output_args(self, outputname: str) -> T.List[str]:
+        return self.get_output_args(outputname)
